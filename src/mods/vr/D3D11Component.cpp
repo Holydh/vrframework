@@ -396,7 +396,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
 
-            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, scene_depth_tex != nullptr);
+            const auto eye_images_ready = m_openxr.ever_acquired(0) && m_openxr.ever_acquired(1);
+            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, scene_depth_tex != nullptr, eye_images_ready);
 
             vr->m_openxr->needs_pose_update = true;
             vr->m_submitted = result == XR_SUCCESS;

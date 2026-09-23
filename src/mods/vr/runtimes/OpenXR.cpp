@@ -170,14 +170,16 @@ uint32_t OpenXR::get_width() const {
         return 0;
     }
 //    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale);
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale * eye_width_adjustment);
+    // Rounded up to even: games size their backbuffer from this and may round odd sizes, which breaks the
+    // same-size CopyResource from the backbuffer into the eye swapchain.
+    return ((uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale * eye_width_adjustment) + 1) & ~1u;
 }
 
 uint32_t OpenXR::get_height() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale * eye_height_adjustment);
+    return ((uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale * eye_height_adjustment) + 1) & ~1u;
 //    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale);
 }
 
@@ -1389,7 +1391,7 @@ XrResult OpenXR::begin_frame(int frame) {
     return result;
 }
 
-XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth) {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth, bool eye_images_ready) {
 
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
@@ -1415,7 +1417,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     auto l_frame = frame % 2 == 0 ? frame : frame - 1;
     auto r_frame = frame % 2 == 0 ? frame - 1 : frame;
 
-    if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
+    if (current_pipeline->frame_state.shouldRender == XR_TRUE && eye_images_ready) {
         projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         if (!ModSettings::showFlatScreenDisplay()) {
             for (auto i = 0; i < projection_layer_views.size(); ++i) {

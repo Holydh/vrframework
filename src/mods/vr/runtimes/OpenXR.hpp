@@ -135,7 +135,9 @@ public:
     }
 
     XrResult begin_frame(int frame);
-    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth = false);
+    // eye_images_ready: every eye swapchain has a released image. Submitting a layer that references a swapchain without
+    // one is XR_ERROR_LAYER_INVALID, which some runtimes (Meta XR Simulator) answer by ending the session.
+    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth = false, bool eye_images_ready = true);
 
     void begin_profile() {
         if (!this->profile_calls) {

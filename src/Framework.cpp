@@ -911,7 +911,16 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         break;
     }
 
-    ImGui_ImplWin32_WndProcHandler(wnd, message, w_param, l_param);
+    // WM_MOUSEMOVE carries real window coordinates, but ImGui's display is the headset-sized client rect from
+    // on_get_client_rect: scale them the way on_screen_to_client scales ImGui's other mouse source.
+    auto imgui_l_param = l_param;
+    if (message == WM_MOUSEMOVE) {
+        POINT point{ static_cast<short>(LOWORD(l_param)), static_cast<short>(HIWORD(l_param)) };
+        BOOL  result = TRUE;
+        on_screen_to_client(&result, wnd, &point);
+        imgui_l_param = MAKELPARAM(point.x, point.y);
+    }
+    ImGui_ImplWin32_WndProcHandler(wnd, message, w_param, imgui_l_param);
 
     {
         // If the user is interacting with the UI we block the message from going to the game.

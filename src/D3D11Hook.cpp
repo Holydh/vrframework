@@ -44,6 +44,17 @@ bool D3D11Hook::hook() {
     swap_chain_desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
+    // Some D3D11 wrappers (3DMigoto) refuse a swapchain on the null driver: retry on the hardware one.
+    const auto create_dummy_device = [&]() {
+        for (const auto driver_type : { D3D_DRIVER_TYPE_NULL, D3D_DRIVER_TYPE_HARDWARE }) {
+            if (SUCCEEDED(D3D11CreateDeviceAndSwapChain(nullptr, driver_type, nullptr, 0, &feature_level, 1, D3D11_SDK_VERSION,
+                    &swap_chain_desc, &swap_chain, &device, nullptr, &context))) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     const auto original_bytes = utility::get_original_bytes(&D3D11CreateDeviceAndSwapChain);
 
     // Temporarily unhook D3D11CreateDeviceAndSwapChain
@@ -58,9 +69,7 @@ bool D3D11Hook::hook() {
         ProtectionOverride protection_override{ &D3D11CreateDeviceAndSwapChain, original_bytes->size(), PAGE_EXECUTE_READWRITE };
         memcpy(&D3D11CreateDeviceAndSwapChain, original_bytes->data(), original_bytes->size());
         
-        if (FAILED(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_NULL, nullptr, 0, &feature_level, 1, D3D11_SDK_VERSION,
-                &swap_chain_desc, &swap_chain, &device, nullptr, &context))) 
-        {
+        if (!create_dummy_device()) {
             spdlog::error("Failed to create D3D11 device");
             memcpy(&D3D11CreateDeviceAndSwapChain, hooked_bytes.data(), hooked_bytes.size());
             return false;
@@ -69,9 +78,7 @@ bool D3D11Hook::hook() {
         spdlog::info("Restoring hooked bytes for D3D11CreateDeviceAndSwapChain");
         memcpy(&D3D11CreateDeviceAndSwapChain, hooked_bytes.data(), hooked_bytes.size());
     } else {
-        if (FAILED(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_NULL, nullptr, 0, &feature_level, 1, D3D11_SDK_VERSION,
-                &swap_chain_desc, &swap_chain, &device, nullptr, &context))) 
-        {
+        if (!create_dummy_device()) {
             spdlog::error("Failed to create D3D11 device");
             return false;
         }

@@ -320,7 +320,20 @@ std::optional<std::string> VR::initialize_openxr() {
     } else {
         spdlog::info("[VR] Found existing openxr instance");
     }
-    
+
+    XrInstanceProperties instance_properties{XR_TYPE_INSTANCE_PROPERTIES};
+    if (xrGetInstanceProperties(m_openxr->instance, &instance_properties) == XR_SUCCESS) {
+        spdlog::info("[VR] OpenXR runtime: {} {}.{}.{}", instance_properties.runtimeName, XR_VERSION_MAJOR(instance_properties.runtimeVersion),
+                     XR_VERSION_MINOR(instance_properties.runtimeVersion), XR_VERSION_PATCH(instance_properties.runtimeVersion));
+
+        // The Meta XR Simulator sizes its readback images from the recommended eye size, and ends the session when the
+        // first submitted frame uses larger swapchains (it fails to reallocate them). Keep the recommended size there.
+        if (std::string_view{instance_properties.runtimeName}.find("Simulator") != std::string_view::npos) {
+            spdlog::info("[VR] Meta XR Simulator: eye swapchains kept at the recommended size");
+            m_openxr->should_grow_rectangle_for_projection_cropping = false;
+        }
+    }
+
     // Step 2: Create a system
     spdlog::info("[VR] Creating OpenXR system");
 
@@ -499,6 +512,9 @@ std::optional<std::string> VR::initialize_openxr_swapchains() {
 
             return m_openxr->error;
         }
+    } else if (!m_openxr->fov_known) {
+        // The eye size isn't final yet: D3D11Component::on_frame creates the swapchains once it is.
+        spdlog::info("[VR] Deferring OpenXR swapchains until the eye size is known");
     } else {
         auto err = m_d3d11.openxr().create_swapchains();
 

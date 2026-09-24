@@ -197,6 +197,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
     }
 
+    m_openxr.create_swapchains_if_resized(vr);
+
     auto& hook = g_framework->get_d3d11_hook();
 
     // get device
@@ -497,10 +499,18 @@ void D3D11Component::on_reset(VR* vr) {
     m_sprite_batch.reset();
     m_toneMap.reset();
 
-    if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
-        if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height()) {
-            m_openxr.create_swapchains();
-        }
+    m_openxr.create_swapchains_if_resized(vr);
+}
+
+// Swapchains are only created once the eye size is final (fov_known): recreating them, even once, ends the session
+// on some runtimes (the Meta XR Simulator runs out of memory rebuilding its copies).
+void D3D11Component::OpenXR::create_swapchains_if_resized(VR* vr) {
+    const auto runtime = vr->get_runtime();
+    if (!runtime->is_openxr() || !runtime->loaded || !runtime->fov_known) {
+        return;
+    }
+    if (this->last_resolution[0] != vr->get_hmd_width() || this->last_resolution[1] != vr->get_hmd_height()) {
+        this->create_swapchains();
     }
 }
 
@@ -791,7 +801,7 @@ void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resou
 
     auto& vr = VR::get();
 
-    if (!vr->m_openxr->should_render()) {
+    if (!vr->m_openxr->should_render() || swapchain_idx >= this->contexts.size()) {
         return;
     }
 

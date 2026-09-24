@@ -146,6 +146,8 @@ struct VRRuntime {
     Vector4f frustums[2]{};
     float eye_width_adjustment{1};
     float eye_height_adjustment{1};
+    // Set once update_matrices has computed the eye adjustments: until then get_width/get_height aren't final.
+    bool fov_known{false};
     float ipd{0.064f};
     float diagonal_fov{0.0f};
 

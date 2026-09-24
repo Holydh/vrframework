@@ -107,6 +107,7 @@ private:
     struct OpenXR {
         void initialize(XrSessionCreateInfo& session_info);
         std::optional<std::string> create_swapchains();
+        void create_swapchains_if_resized(VR* vr);
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource);
 

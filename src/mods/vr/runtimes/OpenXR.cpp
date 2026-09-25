@@ -1392,7 +1392,7 @@ XrResult OpenXR::begin_frame(int frame) {
     return result;
 }
 
-XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth, bool eye_images_ready) {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth, bool eye_images_ready, bool native_stereo) {
 
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
@@ -1423,11 +1423,11 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
         if (!ModSettings::showFlatScreenDisplay()) {
             for (auto i = 0; i < projection_layer_views.size(); ++i) {
                 const auto& swapchain = this->swapchains[i];
-                int         actual_frame = i == 0 ? l_frame : r_frame;
+                int         actual_frame = native_stereo ? frame : i == 0 ? l_frame : r_frame;
                 auto& constants = GlobalPool::get_xr_constants(actual_frame);
 
                 projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-                projection_layer_views[i].pose = constants.pose;
+                projection_layer_views[i].pose = native_stereo && i == 1 ? constants.right_pose : constants.pose;
                 projection_layer_views[i].subImage.swapchain = swapchain.handle;
                 int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
                 int texture_area_width = swapchain.width;

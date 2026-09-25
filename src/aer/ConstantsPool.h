@@ -15,6 +15,8 @@ namespace GlobalPool
         struct OpenXR {
             XrPosef pose{};
             XrFovf  fov{};
+            // Native stereo: the right eye's pose of the same frame (pose holds the left eye's).
+            XrPosef right_pose{};
         } openxr;
 
         struct OpenVR {
@@ -58,6 +60,10 @@ namespace GlobalPool
 
     inline void submit_openxr_pose(XrPosef& pose, int frame) {
         g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.pose = pose;
+    }
+
+    inline void submit_openxr_right_pose(XrPosef& pose, int frame) {
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.right_pose = pose;
     }
 
     inline const auto& get_openxr_pose(int frame) {

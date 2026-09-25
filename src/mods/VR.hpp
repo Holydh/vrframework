@@ -128,6 +128,21 @@ public:
         return get_runtime()->get_height();
     }
 
+    // Native stereo: the game renders both eyes side by side in one backbuffer, twice the eye width, and each present
+    // submits both eyes of the same frame. Otherwise each frame renders one eye (AER).
+    bool is_native_stereo() const {
+        return m_native_stereo;
+    }
+
+    void set_native_stereo(bool value) {
+        m_native_stereo = value;
+    }
+
+    // Width the game renders at.
+    auto get_game_render_width() const {
+        return get_hmd_width() * (is_native_stereo() ? 2 : 1);
+    }
+
     auto get_last_controller_update() const {
         return m_last_controller_update;
     }
@@ -140,6 +155,11 @@ public:
         // openVR has issues with 2 different poses at the same time for non steam native VR hmds like oculus
         // for these exceptions need to implement viewport cropping and viewport reprojection
         return m_use_async_aer->value() && g_framework->is_dx12();
+    }
+
+    // Every frame starts and ends a runtime frame, instead of every other one.
+    bool syncs_every_frame() const {
+        return is_using_async_aer() || is_native_stereo();
     }
 
     bool is_gui_enabled() const {
@@ -157,6 +177,7 @@ public:
 
     Vector4f get_current_offset();
     Matrix4x4f get_current_eye_transform(bool flip = false);
+    Matrix4x4f get_eye_transform(VRRuntime::Eye eye);
     Matrix4x4f get_current_projection_matrix(bool flip = false);
 
     auto& get_controllers() const {
@@ -579,6 +600,8 @@ private:
     // == 1 or == 0
     uint8_t m_left_eye_interval{0};
     uint8_t m_right_eye_interval{1};
+
+    std::atomic<bool> m_native_stereo{false};
 
     static std::string actions_json;
     static std::string binding_rift_json;

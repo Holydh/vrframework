@@ -767,7 +767,7 @@ void Framework::on_screen_to_client(auto result, auto wnd, auto point) {
             const float real_height = static_cast<float>(real_client_rect.bottom - real_client_rect.top);
 
             if (real_width > 0 && real_height > 0) {
-                const float virtual_width = static_cast<float>(vr->get_hmd_width());
+                const float virtual_width = static_cast<float>(vr->get_game_render_width());
                 const float virtual_height = static_cast<float>(vr->get_hmd_height());
 
                 const float scale_x = virtual_width / real_width;
@@ -792,7 +792,7 @@ bool Framework::on_clip_cursor(auto lpRect) {
 void Framework::on_get_window_rect(auto result, auto wnd, auto rect) {
     static auto vr = VR::get();
     if(wnd == m_wnd && vr->is_hmd_active()) {
-        int width = vr->get_hmd_width();
+        int width = vr->get_game_render_width();
         int height = vr->get_hmd_height();
         RECT clientRect;
         WindowsMessageHook::GetClientRectOriginal(wnd, &clientRect);
@@ -806,7 +806,7 @@ void Framework::on_get_window_rect(auto result, auto wnd, auto rect) {
 void Framework::on_get_client_rect(auto result, auto wnd, auto rect) {
     static auto vr = VR::get();
     if(wnd == m_wnd && vr->is_hmd_active()) {
-        int width = vr->get_hmd_width();
+        int width = vr->get_game_render_width();
         int height = vr->get_hmd_height();
         rect->right = rect->left + width;
         rect->bottom = rect->top + height;

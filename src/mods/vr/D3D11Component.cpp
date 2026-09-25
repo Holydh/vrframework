@@ -229,6 +229,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     }
 
     auto runtime = vr->get_runtime();
+    if (vr->is_native_stereo()) {
+        return on_native_stereo_frame(vr, backbuffer.Get());
+    }
+
     bool is_left_eye_frame = vr->m_presenter_frame_count % 2 == vr->m_left_eye_interval;
     bool is_right_eye_frame = !is_left_eye_frame;
 
@@ -482,6 +486,66 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             }
         }
     }
+
+    return vr::VRCompositorError_None;
+}
+
+// Native stereo: the backbuffer holds both eyes side by side. Each present copies its halves into the eye swapchains
+// and ends the runtime frame. OpenXR only, and the tone map option isn't applied.
+vr::EVRCompositorError D3D11Component::on_native_stereo_frame(VR* vr, ID3D11Texture2D* backbuffer) {
+    const auto runtime = vr->get_runtime();
+    if (!runtime->is_openxr() || !runtime->ready() || !vr->m_openxr->ready()) {
+        return vr::VRCompositorError_None;
+    }
+
+    const auto eye_width = vr->get_hmd_width();
+    const auto eye_height = vr->get_hmd_height();
+
+    if (vr->m_openxr->frame_began) {
+        auto fw_rt = g_framework->get_rendertarget_d3d11();
+
+        if (fw_rt != nullptr && g_framework->is_drawing_ui()) {
+            // The UI texture has the backbuffer's size: its left part, where the menu is drawn, fills the UI swapchain.
+            const D3D11_BOX ui_box{0, 0, 0, std::min(eye_width, g_framework->get_overlay_width_d3d11()), std::min(eye_height, g_framework->get_overlay_height_d3d11()), 1};
+            m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI, fw_rt.Get(), &ui_box);
+        }
+    }
+
+    // Until the game has resized its backbuffer, the eyes keep their last images.
+    if (m_backbuffer_size[0] == 2 * eye_width && m_backbuffer_size[1] == eye_height) {
+        const D3D11_BOX left_box{0, 0, 0, eye_width, eye_height, 1};
+        const D3D11_BOX right_box{eye_width, 0, 0, 2 * eye_width, eye_height, 1};
+        m_openxr.copy(0, backbuffer, &left_box);
+        m_openxr.copy(1, backbuffer, &right_box);
+    }
+
+    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
+        runtime->synchronize_frame(vr->m_presenter_frame_count);
+
+        if (!runtime->got_first_poses) {
+            runtime->update_poses(vr->m_presenter_frame_count + 1);
+        }
+    }
+
+    if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
+        vr->m_openxr->begin_frame(vr->m_presenter_frame_count);
+    }
+
+    std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
+
+    if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
+        const auto framework_quad = vr->get_overlay_component().get_openxr().generate_framework_ui_quad();
+
+        if (framework_quad) {
+            quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
+        }
+    }
+
+    const auto eye_images_ready = m_openxr.ever_acquired(0) && m_openxr.ever_acquired(1);
+    const auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, false, eye_images_ready, true);
+
+    vr->m_openxr->needs_pose_update = true;
+    vr->m_submitted = result == XR_SUCCESS;
 
     return vr::VRCompositorError_None;
 }
@@ -796,7 +860,7 @@ void D3D11Component::OpenXR::destroy_swapchains() {
     this->contexts.clear();
 }
 
-void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resource) {
+void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, const D3D11_BOX* source_box) {
     std::scoped_lock _{this->mtx};
 
     auto& vr = VR::get();
@@ -845,7 +909,11 @@ void D3D11Component::OpenXR::copy(uint32_t swapchain_idx, ID3D11Texture2D* resou
             spdlog::error("[VR] xrWaitSwapchainImage failed: {}", vr->m_openxr->get_result_string(result));
         } else {
             LOG_VERBOSE("Copying swapchain image {} for {}", texture_index, swapchain_idx);
-            context->CopyResource(ctx.textures[texture_index].texture, resource);
+            if (source_box) {
+                context->CopySubresourceRegion(ctx.textures[texture_index].texture, 0, 0, 0, 0, resource, 0, source_box);
+            } else {
+                context->CopyResource(ctx.textures[texture_index].texture, resource);
+            }
 
             XrSwapchainImageReleaseInfo release_info{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
 

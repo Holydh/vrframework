@@ -109,7 +109,8 @@ private:
         std::optional<std::string> create_swapchains();
         void create_swapchains_if_resized(VR* vr);
         void destroy_swapchains();
-        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource);
+        // source_box: the part of `resource` to copy (all of it by default).
+        void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource, const D3D11_BOX* source_box = nullptr);
 
 
         inline bool ever_acquired(uint32_t swapchain_idx) {
@@ -138,5 +139,6 @@ private:
     } m_openxr;
 
     bool setup();
+    vr::EVRCompositorError on_native_stereo_frame(VR* vr, ID3D11Texture2D* backbuffer);
 };
 } // namespace vrmod
